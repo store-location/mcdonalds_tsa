@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>McDonald's</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+@font-face {
+    font-family: 'ITC Avant Garde Gothic';
+    src: url('correct-path-to-your-font/ITCAvantGardeGothic.woff2') format('woff2'),
+         url('correct-path-to-your-font/ITCAvantGardeGothic.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+}
+
+        /* Step 2: Apply Font Globally */
+        body, #map, .leaflet-container, .leaflet-popup-content, .leaflet-control {
+            font-family: 'ITC Avant Garde Gothic', sans-serif;
+        }
+
+        /* Step 3: Custom Tooltip Style (if needed) */
+        .store-tooltip {
+            font-family: 'ITC Avant Garde Gothic', sans-serif;
+            font-size: 1.1em;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #f4f4f4 30%, #ffffff);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            animation: fadeIn 2s ease-in-out forwards;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            background-color: #ffffffd9;
+            padding: 10px 20px;
+            box-sizing: border-box;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+
+        h1 {
+            color: #d62300;
+            font-size: 2.5em;
+            margin: 0;
+            opacity: 0;
+            transform: translateY(-50px);
+            animation: slideInFromTop 1s forwards ease-in-out 1s;
+        }
+
+        #nearest-store-button {
+            padding: 12px 24px;
+            background-color: #d62300;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+            transition: background-color 0.4s, transform 0.4s;
+            opacity: 0;
+            transform: translateY(-50px);
+            animation: slideInFromTop 1s forwards ease-in-out 1.8s, pulseButton 2s infinite ease-in-out 2.5s;
+        }
+
+        #nearest-store-button:hover {
+            background-color: #ff6347;
+            transform: scale(1.15) rotate(-2deg);
+        }
+
+        #map {
+            flex-grow: 1;
+            width: 90%;
+            height: 80%;
+            margin: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            opacity: 0;
+            transform: scale(0.9);
+            animation: mapZoomIn 1.2s forwards ease-in-out 1.5s;
+            border: 5px solid transparent;
+            transition: border 1s ease-in-out;
+        }
+
+        #map:hover {
+            transform: scale(1.03);
+            border: 5px solid #ff6347;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2em;
+            }
+
+            #nearest-store-button {
+                padding: 10px 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 1.6em;
+            }
+
+            #nearest-store-button {
+                padding: 8px 16px;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideInFromTop {
+            from {
+                opacity: 0;
+                transform: translateY(-50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes mapZoomIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes pulseButton {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        @keyframes bounceMarker {
+            0% {
+                transform: scale(0);
+                opacity: 0;
+            }
+            50% {
+                transform: scale(1.1);
+                opacity: 0.7;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>McDonald's</h1>
+        <button id="nearest-store-button" onclick="getLocation()">Find Nearest Store</button>
+    </div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        // Custom KFC pin icon
+        const kfcIcon = L.icon({
+    iconUrl: 'https://www.mcdonalds.com/content/dam/sites/ArabiaGWS/english/nfl/logo/McDonalds_Logo.png',
+            iconSize: [38, 45],
+            iconAnchor: [32, 55],
+            popupAnchor: [-3, -76]
+});
+
+        // Store locations
+        const stores = [
+    {
+        "name": "Sitteen Street",
+        "lat": 24.67033795,
+        "lng": 46.72762858,
+        "url": "https://www.google.com/maps?q=24.67033795,46.72762858"
+    },
+    {
+        "name": "Enkas",
+        "lat": 24.75318162,
+        "lng": 46.76942812,
+        "url": "https://www.google.com/maps?q=24.75318162,46.76942812"
+    },
+    {
+        "name": "Khobar Corniche",
+        "lat": 26.28608343,
+        "lng": 50.22036682,
+        "url": "https://www.google.com/maps?q=26.28608343,50.22036682"
+    },
+    {
+        "name": "Dabab",
+        "lat": 24.69683489,
+        "lng": 46.70369362,
+        "url": "https://www.google.com/maps?q=24.69683489,46.70369362"
+    },
+    {
+        "name": "Mrekebat",
+        "lat": 26.41553637,
+        "lng": 50.10905837,
+        "url": "https://www.google.com/maps?q=26.41553637,50.10905837"
+    },
+    {
+        "name": "Dammam Cornish",
+        "lat": 26.46148539,
+        "lng": 50.11345183,
+        "url": "https://www.google.com/maps?q=26.46148539,50.11345183"
+    },
+    {
+        "name": "Naseem",
+        "lat": 24.74291247,
+        "lng": 46.80847036,
+        "url": "https://www.google.com/maps?q=24.74291247,46.80847036"
+    },
+    {
+        "name": "Mubarraz",
+        "lat": 25.42005504,
+        "lng": 49.57471834,
+        "url": "https://www.google.com/maps?q=25.42005504,49.57471834"
+    },
+    {
+        "name": "Al-Kharj",
+        "lat": 24.1579966,
+        "lng": 47.32474624,
+        "url": "https://www.google.com/maps?q=24.1579966,47.32474624"
+    },
+    {
+        "name": "King Abdullah",
+        "lat": 24.73270193,
+        "lng": 46.67683719,
+        "url": "https://www.google.com/maps?q=24.73270193,46.67683719"
+    },
+    {
+        "name": "Tarafiah",
+        "lat": 26.34656314,
+        "lng": 43.97777264,
+        "url": "https://www.google.com/maps?q=26.34656314,43.97777264"
+    },
+    {
+        "name": "Al-Swaidi",
+        "lat": 24.59591903,
+        "lng": 46.68109493,
+        "url": "https://www.google.com/maps?q=24.59591903,46.68109493"
+    },
+    {
+        "name": "Bin Khaldon",
+        "lat": 26.41524811,
+        "lng": 50.07691048,
+        "url": "https://www.google.com/maps?q=26.41524811,50.07691048"
+    },
+    {
+        "name": "Al-Nuzha",
+        "lat": 24.75222646,
+        "lng": 46.72034048,
+        "url": "https://www.google.com/maps?q=24.75222646,46.72034048"
+    },
+    {
+        "name": "Al-Shifaa",
+        "lat": 24.57027487,
+        "lng": 46.69128719,
+        "url": "https://www.google.com/maps?q=24.57027487,46.69128719"
+    },
+    {
+        "name": "Unizah",
+        "lat": 26.09147734,
+        "lng": 43.988362,
+        "url": "https://www.google.com/maps?q=26.09147734,43.988362"
+    },
+    {
+        "name": "Al-Nahdah",
+        "lat": 24.76179585,
+        "lng": 46.79896555,
+        "url": "https://www.google.com/maps?q=24.76179585,46.79896555"
+    },
+    {
+        "name": "Rabwa",
+        "lat": 24.69089566,
+        "lng": 46.76376332,
+        "url": "https://www.google.com/maps?q=24.69089566,46.76376332"
+    },
+    {
+        "name": "Green Belt",
+        "lat": 26.30511941,
+        "lng": 50.19626071,
+        "url": "https://www.google.com/maps?q=26.30511941,50.19626071"
+    },
+    {
+        "name": "Salmaniah",
+        "lat": 25.35950807,
+        "lng": 49.54807851,
+        "url": "https://www.google.com/maps?q=25.35950807,49.54807851"
+    },
+    {
+        "name": "Ta'awin",
+        "lat": 24.7609356,
+        "lng": 46.6955003,
+        "url": "https://www.google.com/maps?q=24.7609356,46.6955003"
+    },
+    {
+        "name": "Mazruayah",
+        "lat": 26.44252007,
+        "lng": 50.11848405,
+        "url": "https://www.google.com/maps?q=26.44252007,50.11848405"
+    },
+    {
+        "name": "Mansoura",
+        "lat": 24.60468023,
+        "lng": 46.73181314,
+        "url": "https://www.google.com/maps?q=24.60468023,46.73181314"
+    },
+    {
+        "name": "Barakah",
+        "lat": 24.5857723,
+        "lng": 46.7773158,
+        "url": "https://www.google.com/maps?q=24.5857723,46.7773158"
+    },
+    {
+        "name": "28th Street",
+        "lat": 26.43457651,
+        "lng": 50.0853978,
+        "url": "https://www.google.com/maps?q=26.43457651,50.0853978"
+    },
+    {
+        "name": "Nada Plaza",
+        "lat": 24.8056842,
+        "lng": 46.69330797,
+        "url": "https://www.google.com/maps?q=24.8056842,46.69330797"
+    },
+    {
+        "name": "Al-Rass",
+        "lat": 25.86688935,
+        "lng": 43.49031307,
+        "url": "https://www.google.com/maps?q=25.86688935,43.49031307"
+    },
+    {
+        "name": "Al-Majma'a",
+        "lat": 25.89774309,
+        "lng": 45.34973248,
+        "url": "https://www.google.com/maps?q=25.89774309,45.34973248"
+    },
+    {
+        "name": "Al-Faisaliah plaza",
+        "lat": 26.40385624,
+        "lng": 50.05738802,
+        "url": "https://www.google.com/maps?q=26.40385624,50.05738802"
+    },
+    {
+        "name": "Sadyan",
+        "lat": 27.55063637,
+        "lng": 41.69989993,
+        "url": "https://www.google.com/maps?q=27.55063637,41.69989993"
+    },
+    {
+        "name": "Bader",
+        "lat": 24.55811356,
+        "lng": 46.70486199,
+        "url": "https://www.google.com/maps?q=24.55811356,46.70486199"
+    },
+    {
+        "name": "AL-Muntazah",
+        "lat": 26.36429362,
+        "lng": 43.9360777,
+        "url": "https://www.google.com/maps?q=26.36429362,43.9360777"
+    },
+    {
+        "name": "Laban",
+        "lat": 24.63149309,
+        "lng": 46.56480454,
+        "url": "https://www.google.com/maps?q=24.63149309,46.56480454"
+    },
+    {
+        "name": "Jubail Plaza",
+        "lat": 27.0118934,
+        "lng": 49.64253054,
+        "url": "https://www.google.com/maps?q=27.0118934,49.64253054"
+    },
+    {
+        "name": "Arcadia Plaza",
+        "lat": 24.67435201,
+        "lng": 46.66850169,
+        "url": "https://www.google.com/maps?q=24.67435201,46.66850169"
+    },
+    {
+        "name": "AlHamra Plaza",
+        "lat": 26.45933871,
+        "lng": 50.09198235,
+        "url": "https://www.google.com/maps?q=26.45933871,50.09198235"
+    },
+    {
+        "name": "Shaqra",
+        "lat": 25.23659135,
+        "lng": 45.25738912,
+        "url": "https://www.google.com/maps?q=25.23659135,45.25738912"
+    },
+    {
+        "name": "K. Abdulaziz Rd",
+        "lat": 26.29407015,
+        "lng": 50.2076097,
+        "url": "https://www.google.com/maps?q=26.29407015,50.2076097"
+    },
+    {
+        "name": "Al Rayan",
+        "lat": 26.39495763,
+        "lng": 43.92583971,
+        "url": "https://www.google.com/maps?q=26.39495763,43.92583971"
+    },
+    {
+        "name": "Al-Thager Plaza",
+        "lat": 24.75353968,
+        "lng": 46.58419101,
+        "url": "https://www.google.com/maps?q=24.75353968,46.58419101"
+    },
+    {
+        "name": "Khurais Road",
+        "lat": 24.75383245,
+        "lng": 46.8240497,
+        "url": "https://www.google.com/maps?q=24.75383245,46.8240497"
+    },
+    {
+        "name": "Dhahran Rd",
+        "lat": 26.2829142,
+        "lng": 50.1965329,
+        "url": "https://www.google.com/maps?q=26.2829142,50.1965329"
+    },
+    {
+        "name": "Mehaires",
+        "lat": 25.44638935,
+        "lng": 49.58139539,
+        "url": "https://www.google.com/maps?q=25.44638935,49.58139539"
+    },
+    {
+        "name": "Al Salam Plaza",
+        "lat": 25.39170267,
+        "lng": 49.56161141,
+        "url": "https://www.google.com/maps?q=25.39170267,49.56161141"
+    },
+    {
+        "name": "AR Rakah plaza",
+        "lat": 26.35939082,
+        "lng": 50.18848121,
+        "url": "https://www.google.com/maps?q=26.35939082,50.18848121"
+    },
+    {
+        "name": "Rabiea 2",
+        "lat": 24.79422775,
+        "lng": 46.65565096,
+        "url": "https://www.google.com/maps?q=24.79422775,46.65565096"
+    },
+    {
+        "name": "Tuwaiq plaza",
+        "lat": 24.56792067,
+        "lng": 46.54507846,
+        "url": "https://www.google.com/maps?q=24.56792067,46.54507846"
+    },
+    {
+        "name": "Al Tilal",
+        "lat": 28.44587172,
+        "lng": 45.94719797,
+        "url": "https://www.google.com/maps?q=28.44587172,45.94719797"
+    },
+    {
+        "name": "Skaka",
+        "lat": 29.95922905,
+        "lng": 40.20455092,
+        "url": "https://www.google.com/maps?q=29.95922905,40.20455092"
+    },
+    {
+        "name": "AN AN Nayfiayh",
+        "lat": 28.37499522,
+        "lng": 45.96160412,
+        "url": "https://www.google.com/maps?q=28.37499522,45.96160412"
+    },
+    {
+        "name": "Al Buhayrah Plaza",
+        "lat": 26.46899795,
+        "lng": 50.06002486,
+        "url": "https://www.google.com/maps?q=26.46899795,50.06002486"
+    },
+    {
+        "name": "Al Fayziyyah",
+        "lat": 26.38668463,
+        "lng": 43.96353006,
+        "url": "https://www.google.com/maps?q=26.38668463,43.96353006"
+    },
+    {
+        "name": "Al Fanar",
+        "lat": 26.3286914,
+        "lng": 50.2137664,
+        "url": "https://www.google.com/maps?q=26.3286914,50.2137664"
+    },
+    {
+        "name": "Bayoniah",
+        "lat": 26.26649847,
+        "lng": 50.21303013,
+        "url": "https://www.google.com/maps?q=26.26649847,50.21303013"
+    },
+    {
+        "name": "Al Rawabi",
+        "lat": 24.68645038,
+        "lng": 46.79528028,
+        "url": "https://www.google.com/maps?q=24.68645038,46.79528028"
+    },
+    {
+        "name": "Takhassusi",
+        "lat": 24.6884512,
+        "lng": 46.67401493,
+        "url": "https://www.google.com/maps?q=24.6884512,46.67401493"
+    },
+    {
+        "name": "Al Nada Dammam",
+        "lat": 26.36626894,
+        "lng": 50.06968617,
+        "url": "https://www.google.com/maps?q=26.36626894,50.06968617"
+    },
+    {
+        "name": "AN Narjis",
+        "lat": 24.83505241,
+        "lng": 46.68240133,
+        "url": "https://www.google.com/maps?q=24.83505241,46.68240133"
+    },
+    {
+        "name": "AN Nasim AL Gharbi",
+        "lat": 24.704556,
+        "lng": 46.833444,
+        "url": "https://www.google.com/maps?q=24.704556,46.833444"
+    },
+    {
+        "name": "Beirut st",
+        "lat": 27.57271603,
+        "lng": 41.730398,
+        "url": "https://www.google.com/maps?q=27.57271603,41.730398"
+    },
+    {
+        "name": "Al-Mursalat",
+        "lat": 24.7408676,
+        "lng": 46.6837425,
+        "url": "https://www.google.com/maps?q=24.7408676,46.6837425"
+    },
+    {
+        "name": "Dammam Industrial City",
+        "lat": 26.23459555,
+        "lng": 49.98817384,
+        "url": "https://www.google.com/maps?q=26.23459555,49.98817384"
+    },
+    {
+        "name": "Al Arid",
+        "lat": 24.884861,
+        "lng": 46.61,
+        "url": "https://www.google.com/maps?q=24.884861,46.61"
+    },
+    {
+        "name": "Najm Aldeen",
+        "lat": 24.5542947,
+        "lng": 46.5544777,
+        "url": "https://www.google.com/maps?q=24.5542947,46.5544777"
+    },
+    {
+        "name": "Al Aqiq",
+        "lat": 24.7751481,
+        "lng": 46.6178114,
+        "url": "https://www.google.com/maps?q=24.7751481,46.6178114"
+    },
+    {
+        "name": "Faihaa",
+        "lat": 24.6769299,
+        "lng": 46.8242997,
+        "url": "https://www.google.com/maps?q=24.6769299,46.8242997"
+    }
+   ];
+
+        // Initialize map
+        const map = L.map('map').setView([24.694234119837365, 45.41734041374325], 5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Add markers with bounce effect
+        stores.forEach(store => {
+            const marker = L.marker([store.lat, store.lng], { icon: kfcIcon }).addTo(map)
+                .bindPopup(`<strong style="color: #d62300; font-size: 1.2em;">${store.name}</strong><br><a href="${store.url}" target="_blank" style="color: #007bff;">Open in Google Maps</a>`);
+            marker._icon.style.animation = "bounceMarker 1s ease-out";
+        });
+
+// Welcome popup with increased size
+const welcomePopup = L.popup()
+    .setLatLng([25.07177089671393, 44.475628643936496])
+    .setContent('<div style="font-size: 1.5em; width: 200px; padding: 20px;"><b>Welcome to McDonald&#39;s!</b><br>Click "Find Nearest Store" to locate the nearest McDonald&#39;s store and grab your special offers.</div>')
+    .openOn(map);
+
+       function getLocation() {
+    if (navigator.geolocation) {
+        if (isSafari()) {
+            const userConsent = confirm("This site needs your location to find the nearest store. Please allow location access in the popup.");
+            if (userConsent) {
+                navigator.geolocation.getCurrentPosition(showNearestStore, handleLocationError, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            }
+        } else {
+            navigator.geolocation.getCurrentPosition(showNearestStore, handleLocationError, {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            });
+        }
+    } else {
+        alert("Geolocation is not supported by this browser.");
+    }
+}
+
+function isSafari() {
+    return /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+}
+
+function handleLocationError(error) {
+    switch(error.code) {
+        case error.PERMISSION_DENIED:
+            alert("User denied the request for Geolocation.");
+            break;
+        case error.POSITION_UNAVAILABLE:
+            alert("Location information is unavailable.");
+            break;
+        case error.TIMEOUT:
+            alert("The request to get user location timed out.");
+            break;
+        case error.UNKNOWN_ERROR:
+            alert("An unknown error occurred.");
+            break;
+    }
+}
+
+        function showNearestStore(position) {
+            const userLat = position.coords.latitude;
+            const userLng = position.coords.longitude;
+            let nearestStore = null;
+            let minDistance = Infinity;
+            stores.forEach(store => {
+                const distance = getDistance(userLat, userLng, store.lat, store.lng);
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearestStore = store;
+                }
+            });
+            if (nearestStore) {
+        alert(`The nearest store is: ${nearestStore.name}`);
+        window.open(nearestStore.url, "_blank");
+            }
+        }
+        function getDistance(lat1, lng1, lat2, lng2) {
+            const R = 6371; // Radius of the Earth in km
+            const dLat = deg2rad(lat2 - lat1);
+            const dLng = deg2rad(lng2 - lng1);
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+                      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            const distance = R * c; // Distance in km
+            return distance;
+        }
+        function deg2rad(deg) {
+            return deg * (Math.PI / 180);
+        }
+    </script>
+</body>
+</html>
